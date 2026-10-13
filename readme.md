@@ -55,3 +55,8 @@ Clicking this button toggles between the modes. When you hover over the button, 
 
 ### Copy All / Paste
 The copy button will copy the full list of account tokens to your clipboard. Sometimes your browser will just clear the extension's data, so you should store the tokens somewhere else. Never share these tokens with somebody else unless you want to give them access to your accounts. The paste button allows you to import one or multiple tokens from your clipboard.
+
+## Editor Grid Snap
+
+### X/Z and Y Snap
+This allows you to adjust what increments the pieces snap to in-game. These inputs must be integers between 1 and 30. They will round/adjust to the closest number possible if a number outside of these parameters is inputted. This tool is made by [TechSubject](https://github.com/techsubject) and just modified to fit the UI. It does _not_ change the grid that is made in the editor. Note that the default snapping measure is 15.
