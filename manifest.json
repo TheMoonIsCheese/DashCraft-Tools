@@ -3,6 +3,9 @@
   "description": "Mods for DashCraft.io",
   "version": "3.0",
   "manifest_version": 3,
+  "icons": {
+    "128": "icon.png"
+  },
   "externally_connectable": {
     "ids": ["*"],
     "matches": ["https://dashcraft.io/*"]
