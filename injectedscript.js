@@ -158,7 +158,14 @@
   const originalFetch=window.fetch;
   if(typeof originalFetch!=="function") return;
   window.fetch=async function(input,init) {
-    const response=await Reflect.apply(originalFetch,this,[input,init]);
+    let response;
+    try {
+      const fetchInput = (input instanceof Request) ? input.clone() : input;
+      response = await Reflect.apply(originalFetch, window, [fetchInput, init]);
+} catch (err) {
+      console.warn("[DashCraft Tools] Network request failed:", err);
+      return; 
+    }
     let url=""; try { url=typeof input==="string" ? input : input.url; } catch (_) {}
     if(!url.includes(WASM_BUILD) || !response.ok) return response;
     let originalBytes;
