@@ -7,7 +7,6 @@
   const KEYS = { xz: "__dcgs_snap_xz", y: "__dcgs_snap_y" };
   const DEFAULTS = { xz: 15, y: 15 };
   const LIMITS = { xz: [1, 30], y: [1, 30] };
-
   const SITES = [
     { offset: 0x1063153, kind: "float", type: "xz-half", original: 7.5 },
     { offset: 0x106317b, kind: "float", type: "xz-float", original: 15 },
@@ -15,7 +14,13 @@
     { offset: 0x10631ff, kind: "float", type: "xz-float", original: 15 },
     { offset: 0x106326a, kind: "int", type: "y-int", original: 15 },
     { offset: 0x1063271, kind: "int", type: "xz-int", original: 15 },
-    { offset: 0x106327a, kind: "int", type: "xz-int", original: 15 }
+    { offset: 0x106327a, kind: "int", type: "xz-int", original: 15 },
+    { offset: 0x106197d, kind: "int", type: "y-int", original: 15 },
+    { offset: 0x10619e5, kind: "int", type: "y-int", original: 15 },
+    { offset: 0x1061c94, kind: "int", type: "y-int", original: 15 },
+    { offset: 0x106389a, kind: "float", type: "y-float", original: 15 },
+    { offset: 0x1062b11, kind: "int", type: "level-cap", original: 100, after: [0x20,0x04] },
+    { offset: 0x1062b16, kind: "int", type: "level-cap", original: 100, after: [0x48] }
   ].sort((a,b)=>a.offset-b.offset);
 
   function readSetting(key) {
@@ -25,6 +30,10 @@
       if (Number.isInteger(n) && n >= min && n <= max) return n;
     } catch (_) {}
     return DEFAULTS[key];
+  }
+
+  function hasBytes(bytes, offset, expected) {
+    return offset >= 0 && offset + expected.length <= bytes.length && expected.every((v,i)=>bytes[offset+i]===v);
   }
 
   function readLeb(bytes, pos) {
@@ -51,9 +60,52 @@
     return out;
   }
 
+  function encodeF32(value) {
+    const bytes=new Uint8Array(4); new DataView(bytes.buffer).setFloat32(0,value,true); return [...bytes];
+  }
+
   function concat(parts) {
     const length=parts.reduce((n,p)=>n+p.length,0), out=new Uint8Array(length); let at=0;
     for(const part of parts){out.set(part,at);at+=part.length;} return out;
+  }
+
+function gridTextureInjection(xz) {
+    const tiling = 1500 / xz;
+    return new Uint8Array([
+      0x23, 0x00, 0x41, 0x10, 0x6b, 0x22, 0x02, 0x24, 0x00,
+      0x20, 0x00, 0x28, 0x02, 0x54, 0x21, 0x01,
+      0x20, 0x01, 0x45, 0x04, 0x40, 0x05,
+      0x20, 0x01, 0x41, 0x00, 0x10, ...encodeUleb(80017), 0x21, 0x01,
+      0x20, 0x01, 0x45, 0x04, 0x40, 0x05,
+      0x41, ...encodeSignedLeb(5403640), 0x10, ...encodeUleb(1870),
+      0x20, 0x01, 0x41, ...encodeSignedLeb(5403640), 0x28, 0x02, 0x00, 0x10, ...encodeUleb(69304), 0x21, 0x01,
+      0x20, 0x01, 0x45, 0x04, 0x40, 0x05,
+      0x20, 0x01, 0x41, 0x00, 0x10, ...encodeUleb(66481), 0x21, 0x01,
+      0x20, 0x01, 0x45, 0x04, 0x40, 0x05,
+      0x20, 0x02, 0x43, ...encodeF32(tiling), 0x38, 0x02, 0x00,
+      0x20, 0x02, 0x43, ...encodeF32(tiling), 0x38, 0x02, 0x04,
+      0x20, 0x01, 0x20, 0x02, 0x41, 0x00, 0x10, ...encodeUleb(66556),
+      0x0b, 0x0b, 0x0b, 0x0b,
+      0x20, 0x02, 0x41, 0x10, 0x6a, 0x24, 0x00
+    ]);
+  }
+
+  function parseImportedCounts(section) {
+    if(!section) return {functions:0,globals:0};
+    const b=section.payload; let p=0; const count=readLeb(b,p); p=count.next;
+    let functions=0,globals=0;
+    for(let i=0;i<count.value;i++) {
+      for(let n=0;n<2;n++){const name=readLeb(b,p);p=name.next+name.value;}
+      const kind=b[p++];
+      if(kind===0){p=readLeb(b,p).next;functions++;}
+      else if(kind===1){p++;const flags=readLeb(b,p);p=readLeb(b,flags.next).next;if(flags.value&1)p=readLeb(b,p).next;}
+      else if(kind===2){const flags=readLeb(b,p);p=readLeb(b,flags.next).next;if(flags.value&1)p=readLeb(b,p).next;}
+      else if(kind===3){p+=2;globals++;}
+      else if(kind===4){p=readLeb(b,p).next;p=readLeb(b,p).next;}
+      else throw new Error(`Unknown WASM import kind ${kind}`);
+    }
+    if(p!==b.length) throw new Error("Could not parse WASM imports exactly");
+    return {functions,globals};
   }
 
   function parseSections(bytes) {
@@ -82,19 +134,19 @@
     const code=sections.find(s=>s.id===10);
     if(!code) return {ok:false,reason:"WASM code section not found",bytes:original};
     try {
+      const imported=parseImportedCounts(sections.find(s=>s.id===2));
       let q=code.payloadStart; const count=readLeb(original,q); q=count.next;
       const bodies=[];
       for(let i=0;i<count.value;i++) {
         const size=readLeb(original,q), bodyStart=size.next, bodyEnd=bodyStart+size.value;
         if(bodyEnd>code.payloadEnd) throw new Error("WASM function extends beyond code section");
-        bodies.push({index:i,start:bodyStart,end:bodyEnd,bytes:original.subarray(bodyStart,bodyEnd),edits:[]});
+        bodies.push({index:imported.functions+i,functionIndex:imported.functions+i,start:bodyStart,end:bodyEnd,bytes:original.subarray(bodyStart,bodyEnd),edits:[]});
         q=bodyEnd;
       }
       if(q!==code.payloadEnd) throw new Error("Could not parse WASM code section exactly");
 
-      let inputDelta=0;
       for(const site of SITES) {
-        const at=site.offset+inputDelta;
+        const at=site.offset;
         if(site.kind==="float") {
           if(at<0 || at+5>original.length || original[at]!==0x43)
             throw new Error(`WASM target mismatch at 0x${site.offset.toString(16)} (float)`);
@@ -103,11 +155,11 @@
           let replacementValue;
           if(site.type==="xz-half") replacementValue=values.xz/2;
           else if(site.type==="xz-float") replacementValue=values.xz;
+          else if(site.type==="y-float") replacementValue=values.y;
           else replacementValue=site.original;
           const replacement=new Uint8Array(5); replacement[0]=0x43;
           new DataView(replacement.buffer).setFloat32(1,replacementValue,true);
           body.edits.push({at,oldLength:5,replacement,baseOffset:site.offset});
-          inputDelta += 0;
         } else {
           if(at<0 || at+2>=original.length || original[at]!==0x41)
             throw new Error(`WASM target mismatch at 0x${site.offset.toString(16)} (integer)`);
@@ -116,7 +168,8 @@
             if(pos>=original.length || shift>35) throw new Error("Invalid signed LEB128 at patch target");
             byte=original[pos++]; immediateLength++; shift+=7;
           } while(byte&0x80);
-          if(original[at+1+immediateLength]!==0x6c)
+          const following=site.after||[0x6c];
+          if(!following.every((value,index)=>original[at+1+immediateLength+index]===value))
             throw new Error(`WASM multiply instruction mismatch at 0x${site.offset.toString(16)}`);
           const oldLength=1+immediateLength;
           const body=bodies.find(b=>at>=b.start && at<b.end);
@@ -124,11 +177,16 @@
           let replacementValue=site.original;
           if(site.type==="y-int") replacementValue=values.y;
           else if(site.type==="xz-int") replacementValue=values.xz;
+          else if(site.type==="level-cap") replacementValue=100000;
           const replacement=new Uint8Array([0x41,...encodeSignedLeb(replacementValue)]);
           body.edits.push({at,oldLength,replacement,baseOffset:site.offset});
-          inputDelta += oldLength-2;
         }
       }
+      const gridBody=bodies.find(b=>b.functionIndex===58206);
+      const gridInsertionAt=gridBody?.start+112;
+      if(!gridBody || original[gridInsertionAt]!==0x20 || original[gridInsertionAt+1]!==0x00)
+        throw new Error("Visible-grid ApplySettings anchor mismatch");
+      gridBody.edits.push({at:gridInsertionAt,oldLength:0,replacement:gridTextureInjection(values.xz),baseOffset:gridInsertionAt});
 
       const rebuiltBodies=[];
       for(const body of bodies) {
@@ -162,7 +220,7 @@
     try {
       const fetchInput = (input instanceof Request) ? input.clone() : input;
       response = await Reflect.apply(originalFetch, window, [fetchInput, init]);
-} catch (err) {
+    } catch (err) {
       console.warn("[DashCraft Tools] Network request failed:", err);
       return; 
     }
@@ -186,12 +244,13 @@
       return makeResponse(result.bytes,response);
     } catch(error) {
       console.error("[DashCraft Tools] Patch failed; original game code remains available.",error);
+      document.documentElement?.setAttribute("data-dcgs-patch","failed");
+      document.documentElement?.setAttribute("data-dcgs-reason",String(error?.message||error));
       if(originalBytes) return makeResponse(originalBytes,response);
       return response;
     }
   };
 })();
-
 // ==========================================
 // 2. GRID SNAP UI STATE & HELPERS
 // ==========================================
