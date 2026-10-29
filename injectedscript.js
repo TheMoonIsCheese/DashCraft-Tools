@@ -173,7 +173,7 @@
       }
       if(q!==code.payloadEnd) throw new Error("[DashCraft Tools] Could not parse WASM code section exactly");
 
-      for(const site of SITES) 
+      for(const site of SITES) {
         const at=site.offset;
         if(site.kind==="float") {
           if(at<0 || at+5>original.length || original[at]!==0x43)
@@ -287,52 +287,62 @@
 let gridSnap = {
     xz: parseInt(localStorage.getItem("__dcgs_snap_xz"), 10) || 15,
     y: parseInt(localStorage.getItem("__dcgs_snap_y"), 10) || 15,
+    rotation: parseInt(localStorage.getItem("__dcgs_rotation_step"), 10) || 90,
     
-    clamp: (val) => {
+    clamp: (val, min = 1, max = 30) => {
         let n = parseInt(val, 10);
-        if (isNaN(n)) return 15;
-        return Math.min(Math.max(n, 1), 30);
+        if (isNaN(n)) return min;
+        return Math.min(Math.max(n, min), max);
     },
-    
-    resetXZInput: (input) => {
-        input.value = gridSnap.xz;
-    },
+    resetXZInput: (input) => { input.value = gridSnap.xz; },
     setXZ: (input) => {
         if (!input || !input.value) return;
-        let val = gridSnap.clamp(input.value);
+        let val = gridSnap.clamp(input.value, 1, 30);
         gridSnap.xz = val;
         localStorage.setItem("__dcgs_snap_xz", String(val));
         try { chrome.storage.local.set({ dashcraftGridSnapXZ: val }); } catch(_) {}
     },
     blurXZ: (input) => {
         if (!input) return;
-        let val = gridSnap.clamp(input.value);
+        let val = gridSnap.clamp(input.value, 1, 30);
         gridSnap.xz = val;
         input.value = val;
         localStorage.setItem("__dcgs_snap_xz", String(val));
         try { chrome.storage.local.set({ dashcraftGridSnapXZ: val }); } catch(_) {}
     },
-
-    resetYInput: (input) => {
-        input.value = gridSnap.y;
-    },
+    resetYInput: (input) => { input.value = gridSnap.y; },
     setY: (input) => {
         if (!input || !input.value) return;
-        let val = gridSnap.clamp(input.value);
+        let val = gridSnap.clamp(input.value, 1, 30);
         gridSnap.y = val;
         localStorage.setItem("__dcgs_snap_y", String(val));
         try { chrome.storage.local.set({ dashcraftGridSnapY: val }); } catch(_) {}
     },
     blurY: (input) => {
         if (!input) return;
-        let val = gridSnap.clamp(input.value);
+        let val = gridSnap.clamp(input.value, 1, 30);
         gridSnap.y = val;
         input.value = val;
         localStorage.setItem("__dcgs_snap_y", String(val));
         try { chrome.storage.local.set({ dashcraftGridSnapY: val }); } catch(_) {}
+    },
+    resetRotationInput: (input) => { input.value = gridSnap.rotation; },
+    setRotation: (input) => {
+        if (!input || !input.value) return;
+        let val = gridSnap.clamp(input.value, 1, 359);
+        gridSnap.rotation = val;
+        localStorage.setItem("__dcgs_rotation_step", String(val));
+        try { chrome.storage.local.set({ dashcraftGridSnapRotation: val }); } catch(_) {}
+    },
+    blurRotation: (input) => {
+        if (!input) return;
+        let val = gridSnap.clamp(input.value, 1, 359);
+        gridSnap.rotation = val;
+        input.value = val;
+        localStorage.setItem("__dcgs_rotation_step", String(val));
+        try { chrome.storage.local.set({ dashcraftGridSnapRotation: val }); } catch(_) {}
     }
 };
-
 // ==========================================
 // 3. DASHCRAFT TOOLS CORE MOD LOGIC
 // ==========================================
@@ -1161,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         createButton("Paste", undefined, accountSwitcher.addFromClipboard)
     ));
 
-    // 4: Integrated Grid Snap Menu (SnapSickle)
+// 4: Integrated Grid Snap Menu (SnapSickle)
     let snapMenu = createMenu("Editor Grid Snap", 4);
     snapMenu.appendChild(createSplitRow(
         createLabel("X/Z Snap"),
@@ -1170,6 +1180,10 @@ document.addEventListener('DOMContentLoaded', () => {
     snapMenu.appendChild(createSplitRow(
         createLabel("Y Snap"),
         createInput("15", "number", gridSnap.resetYInput, gridSnap.setY, gridSnap.blurY)
+    ));
+    snapMenu.appendChild(createSplitRow(
+        createLabel("Rotation (°)"),
+        createInput("90", "number", gridSnap.resetRotationInput, gridSnap.setRotation, gridSnap.blurRotation)
     ));
     snapMenu.appendChild(createLabel("<em>Reload game to apply snap changes.</em>", "smallLabel"));
 
