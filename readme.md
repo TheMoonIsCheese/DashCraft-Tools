@@ -58,5 +58,10 @@ The copy button will copy the full list of account tokens to your clipboard. Som
 
 ## Editor Grid Snap
 
+This tool is made by [TechSubject](https://github.com/techsubject) and just modified to fit the UI.
+
 ### X/Z and Y Snap
-This allows you to adjust what increments the pieces snap to in-game. These inputs must be integers between 1 and 30. They will round/adjust to the closest number possible if a number outside of these parameters is inputted. This tool is made by [TechSubject](https://github.com/techsubject) and just modified to fit the UI. It does _not_ change the grid that is made in the editor. Note that the default snapping measure is 15.
+This allows you to adjust what increments the pieces snap to in-game. These inputs must be integers between 1 and 30. They will round/adjust to the closest number possible if a number outside of these parameters is inputted. Note that the default snapping measure is 15.
+
+### Rotation
+This input allows you to adjust increments that the piece is rotated at. Note that it is measured in degrees and it does not work on Ground Blocks (most likely due to some ground block resolving script). 
