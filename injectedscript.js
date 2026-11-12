@@ -253,7 +253,15 @@
       return; 
     }
     let url=""; try { url=typeof input==="string" ? input : input.url; } catch (_) {}
-    if(!url.includes(WASM_BUILD) || !response.ok) return response;
+    if (url.includes(".wasm") && !url.includes(WASM_BUILD)) {
+      document.documentElement?.setAttribute("data-dcgs-patch", "unsupported");
+      return response;
+    }
+    if (url.includes("api.dashcraft.io") && !document.documentElement?.hasAttribute("data-dcgs-patch")) {
+      document.documentElement?.setAttribute("data-dcgs-patch", "no_wasm");
+      return response;
+    }
+    if (!url.includes(WASM_BUILD) || !response.ok) return response;
     let originalBytes;
     try {
       originalBytes=await response.arrayBuffer();
@@ -1182,10 +1190,28 @@ document.addEventListener('DOMContentLoaded', () => {
         createInput("15", "number", gridSnap.resetYInput, gridSnap.setY, gridSnap.blurY)
     ));
     snapMenu.appendChild(createSplitRow(
-        createLabel("Rotation (°)"),
+        createLabel("Rotation"),
         createInput("90", "number", gridSnap.resetRotationInput, gridSnap.setRotation, gridSnap.blurRotation)
     ));
-    snapMenu.appendChild(createLabel("<em>Reload game to apply snap changes.</em>", "smallLabel"));
+    let snapStatus = createLabel("<em>Waiting for game engine...</em>", "smallLabel");
+    snapMenu.appendChild(snapStatus);
+    const syncSnapUI = () => {
+          const status = document.documentElement?.getAttribute("data-dcgs-patch");
+         if (status === "applied") {
+             snapStatus.innerHTML = `<span style="color:#73d854;"> Reload to apply changes.</span>`;
+            } else if (status === "no_wasm" || status === "unsupported" || status === "mismatch" || status === "failed") {
+              snapStatus.innerHTML = `<span style="color:#d85454;"> Unavailable (No WASM found)</span>`;
+              snapMenu.querySelectorAll("input").forEach(inp => {
+                 inp.disabled = true;
+                 inp.style.opacity = "0.4";
+            });
+        }
+    };
+    new MutationObserver(syncSnapUI).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-dcgs-patch"]
+    });
+    syncSnapUI();
 
     modLayer.appendChild(miscMenu);
     modLayer.appendChild(jsonMenu);
