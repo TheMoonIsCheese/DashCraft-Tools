@@ -252,7 +252,10 @@
       console.warn("[DashCraft Tools] Network request failed:", err);
       return; 
     }
-    let url=""; try { url=typeof input==="string" ? input : input.url; } catch (_) {}
+    let url = "";
+    try {
+      url = typeof input === "string" ? input : (input?.url || String(input || ""));
+    } catch (_) {}
     if (url.includes(".wasm") && !url.includes(WASM_BUILD)) {
       document.documentElement?.setAttribute("data-dcgs-patch", "unsupported");
       return response;
@@ -1344,21 +1347,16 @@ function getInstructions(pieces) {
 // ==========================================
 const realFetch = window.fetch;
 window.fetch = (url, options) => {
-
-    // Extract authorization tokens
+    const urlStr = typeof url === "string" ? url : (url?.url || "");
     if (options && options.headers && options.headers.Authorization) {
         currentToken = options.headers.Authorization;
         if (accountSwitcher.autoAdd.value) {
             accountSwitcher.addToken(currentToken);
         }
     }
-
-    // Override page size
-    if (misc.pageSize.override && url.length) {
+    if (misc.pageSize.override && typeof url === "string") {
         url = url.replace("pageSize=15", `pageSize=${misc.pageSize.value}`);
     }
-
-    // Bugfix: private saved tracks (always on)
     if (/^https:\/\/api\.dashcraft\.io\/trackv2\/saved\?page=\d+&pageSize=\d{1,2}$/.test(url)) {
         return new Promise(resolve => {
             realFetch(url, options)
